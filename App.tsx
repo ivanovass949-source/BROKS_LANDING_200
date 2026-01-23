@@ -1,4 +1,4 @@
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, ChangeEvent, FormEvent, useEffect } from 'react';
 
 // --- Assets (Simulated 3D Objects via Emoji/CSS) ---
 // In a real production build, these would be the specific PNG/GLB assets from the reference.
@@ -36,24 +36,82 @@ export default function App() {
   const [hoveredLetter, setHoveredLetter] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  // Phone formatting logic
-  const formatPhoneNumber = (value: string) => {
-    const digits = value.replace(/\D/g, '');
+  // Animation State
+  const [highlightIndex, setHighlightIndex] = useState<number>(-1);
+  const [isAllGreen, setIsAllGreen] = useState(false);
+
+  useEffect(() => {
+    // Initial start delay
+    const startDelay = setTimeout(() => {
+      let currentIndex = 0;
+      // Interval for sequential lighting
+      const interval = setInterval(() => {
+        if (currentIndex < 5) {
+          setHighlightIndex(currentIndex);
+          currentIndex++;
+        } else {
+          // Sequence finished
+          clearInterval(interval);
+          setHighlightIndex(-1);
+          setIsAllGreen(true);
+          
+          // Hold full green for 5 seconds
+          setTimeout(() => {
+            setIsAllGreen(false);
+          }, 5000);
+        }
+      }, 300); // 300ms per letter
+    }, 500);
+
+    return () => clearTimeout(startDelay);
+  }, []);
+
+  // Enhanced Phone formatting logic
+  const formatPhoneNumber = (newValue: string, prevValue: string) => {
+    const isDeleting = newValue.length < prevValue.length;
+    let digits = newValue.replace(/\D/g, '');
+
+    // Handle deletion of formatting characters
+    if (isDeleting && digits === prevValue.replace(/\D/g, '') && digits.length > 0) {
+      digits = digits.slice(0, -1);
+    }
+
     if (!digits) return '';
-    let cleanDigits = digits.startsWith('7') || digits.startsWith('8') ? digits.slice(1) : digits;
+
+    // If first digit is 7 or 8, use it as country code but don't include in subscriber digits
+    let cleanDigits = '';
+    if (digits.startsWith('7') || digits.startsWith('8')) {
+      cleanDigits = digits.slice(1);
+    } else {
+      cleanDigits = digits;
+    }
+
+    // Limit to 10 subscriber digits
     cleanDigits = cleanDigits.slice(0, 10);
+
+    // Build mask
     let formatted = '+7';
-    if (cleanDigits.length > 0) formatted += ` (${cleanDigits.slice(0, 3)}`;
-    if (cleanDigits.length >= 3) formatted += `) ${cleanDigits.slice(3, 6)}`;
-    if (cleanDigits.length >= 6) formatted += `-${cleanDigits.slice(6, 8)}`;
-    if (cleanDigits.length >= 8) formatted += `-${cleanDigits.slice(8, 10)}`;
+    if (cleanDigits.length > 0) {
+      formatted += ` (${cleanDigits.slice(0, 3)}`;
+    }
+    if (cleanDigits.length >= 3) {
+      formatted += `) ${cleanDigits.slice(3, 6)}`;
+    }
+    if (cleanDigits.length >= 6) {
+      formatted += `-${cleanDigits.slice(6, 8)}`;
+    }
+    if (cleanDigits.length >= 8) {
+      formatted += `-${cleanDigits.slice(8, 10)}`;
+    }
+    
     return formatted;
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     if (id === 'phone') {
-         setFormData(prev => ({ ...prev, phone: formatPhoneNumber(value) }));
+      const formatted = formatPhoneNumber(value, formData.phone);
+      setFormData(prev => ({ ...prev, phone: formatted }));
     } else {
       setFormData(prev => ({ ...prev, [id]: value }));
     }
@@ -78,21 +136,22 @@ export default function App() {
           </div>
         </div>
 
-        {/* Floating elements removed as requested */}
-
         {/* CENTER TITLE: BROKS */}
         <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
           <h1 className="text-[22vw] leading-[0.8] font-black tracking-tighter flex items-center justify-center mix-blend-exclusion">
-            {['B','R','O','K','S'].map((char, i) => (
-              <span 
-                key={i}
-                className={`transition-transform duration-300 pointer-events-auto cursor-none hover:text-[#ccff00] hover:scale-110 hover:-rotate-3`}
-                onMouseEnter={() => setHoveredLetter(i)}
-                onMouseLeave={() => setHoveredLetter(null)}
-              >
-                {char}
-              </span>
-            ))}
+            {['B','R','O','K','S'].map((char, i) => {
+              const isActive = highlightIndex === i || isAllGreen;
+              return (
+                <span 
+                  key={i}
+                  className={`transition-all duration-300 pointer-events-auto cursor-none hover:text-[#ccff00] hover:scale-110 hover:-rotate-3 ${isActive ? 'text-[#ccff00] scale-105' : 'text-white'}`}
+                  onMouseEnter={() => setHoveredLetter(i)}
+                  onMouseLeave={() => setHoveredLetter(null)}
+                >
+                  {char}
+                </span>
+              );
+            })}
           </h1>
         </div>
         
@@ -112,22 +171,17 @@ export default function App() {
       {/* --- MARQUEE --- */}
       <Marquee text="БЫСТРЫЙ ПОИСК ОБЪЕКТОВ • ПРОЗРАЧНЫЕ КОМИССИИ • НИКАКИХ ФЕЙКОВ • " bg="bg-[#ccff00]" />
 
-      {/* --- MISSION SECTION (KEEP MOSCOW STYLE) --- */}
+      {/* --- MISSION SECTION --- */}
       <section className="bg-white text-black py-20 px-6 md:px-10 flex justify-center">
         <div className="max-w-[960px] w-full text-left">
-          
-          {/* Main Headline */}
           <h2 className="text-4xl md:text-[56px] font-light leading-[1.1] tracking-[-0.02em] text-black mb-12">
             BROKS — <br />
             это профессиональный инструмент для удобной и безопасной работы брокеров.
           </h2>
-
-          {/* Body Description */}
           <p className="text-lg md:text-[20px] font-normal leading-relaxed text-black/70">
             Проверка договоров, фиксация клиента и защита ваших интересов на каждом&nbsp;этапе. <br />
             Просто, надёжно, без лишней бюрократии.
           </p>
-
         </div>
       </section>
 
